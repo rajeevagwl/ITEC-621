@@ -1,0 +1,1226 @@
+---
+title: "Heart Failure Risk Prediction using Logistic Regression, LASSO, Random Forest and Boosted Trees."
+author: "Norris Jaber, Rajeev Agrawal, Sha Lu, Yuxi Duan, Jen-Yu Huang"
+date: "4/22/2021"
+output: 
+  pdf_document:
+    extra_dependencies: "subfig"
+fontsize: 12pt
+geometry: margin=1in
+header-includes:
+   - \usepackage{setspace}\doublespacing
+   - \usepackage{float}
+fig_caption: yes
+indent: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = F)
+library(tidyverse)
+library(ggthemes)
+library(GGally)
+library(ROCR)
+
+options(scipen = 4)
+
+heart1 <- read_csv("../data/heart_failure_clinical_records_dataset.csv", col_types = "nfnfnfnnnffnf")
+
+heart <- read_csv("../data/heart_failure_clinical_records_dataset.csv", col_types = "nfnfnfnnnffnn")
+```
+
+\pagebreak
+
+## 1. Business Question and Case
+
+### 1.1 Business Question
+
+What factors increase the risk of death due to heart failure?
+
+### 1.2 Business Case
+
+Cardiovascular diseases (CVDs) are the number one cause of death globally, taking an estimated 17.9 million lives each year, which accounts for 31% of all deaths worldwide. Heart failure is a common event caused by CVDs and this dataset contains 12 features that can be used to predict mortality by heart failure. Most cardiovascular diseases can be prevented by addressing behavioral risk factors such as tobacco use, unhealthy diet and obesity, physical inactivity and harmful use of alcohol using population-wide strategies. People with cardiovascular disease or who are at high cardiovascular risk (due to the presence of one or more risk factors such as hypertension, diabetes, hyperlipidemia or already established disease) need early detection and management wherein a machine learning model can be of great help.
+
+## 2.	Analytics Question
+
+### 2.1 Outcome Variable of Interest
+
+Our outcome variable of interest is whether a person died of heart failure. This is represented as a binary variable called “DEATH_EVENT” in our data set, where 0 = no death and 1 = death. 
+
+### 2.2 Main Predictors
+
+The key predictors of our model include demographic information such as age and gender. This will allow us to see which demographic is more likely to die from heart failure. We will also be including health related factors such as if the patient has anemia, high blood pressure, diabetes, as well as if the patient is a smoker. These predictors are important as it will show us which health related variables are more likely to cause heart failure in patients. Knowing these will allow caregivers and doctors know which of their patients are most at risk. We will also be including more specific predictors such as level of creatinine in the blood and level of sodium for example, which will allow us to see more a greater spectrum of patient health. Such predictors are important as they may show how close a patient is to death via heart failure and will allow caregivers to give more precise treatment. 
+
+## 3. Data set Description
+
+For this study, the data set was obtained from Kaggle [1]. This is a data set of 299 patients with heart failure collected at the Faisalabad Institute of Cardiology and at the Allied Hospital in Faisalabad (Punjab, Pakistan), during April – December 2015. The patients consisted of 105 women and 194 men, and their ages range between 40 and 95 years old. All the patients had left ventricular systolic dysfunction and had previous heart failures that put them in classes III or IV of New York Heart Association (NYHA) classification of the stages of heart failure [2].
+
+\singlespacing
+
+## 4. Exploratory Data Analysis
+
+### 4.1 Variables
+
+The data set contains total 299 records with the following 13 variables (Outcome variable - _DEATH_EVENT_):
+
+* **Categorical variables**
+  + *anaemia:* Decrease of red blood cells or hemoglobin; 1 = Yes, 0 = No.
+  + *high_blood_pressure:* If a patient has hypertension; 1 = Yes, 0 = No.
+  + *diabetes:* If the patient has diabetes; 1 = Yes, 0 = No.
+  + *sex:* 1 = Male, 0 = Female.
+  + *smoking:* If the patient smokes; 1 = Yes, 0 = No.
+  + *DEATH_EVENT:* If the patient died during the follow-up period; 1 = Yes, 0 = No.
+* **Quantitative variables**
+  + *age:* Age of the patient in years.
+  + *creatinine_phosphokinase:* Level of the CPK enzyme in the blood in micrograms/L.
+  + *ejection_fraction:* Percentage of blood leaving the heart at each contraction.
+  + *platelets:* Platelets in the blood in kiloplatelets/mL.
+  + *serum_creatinine:* Level of creatinine in the blood in mg/dL.
+  + *serum_sodium:* Level of sodium in the blood in milliequivalents/L.
+  + *time:* Follow-up period in days.
+
+### 4.2 Descriptive Analytics
+
+There are no missing values in the data set, so we do not need to do any imputation. 
+
+_4.2.1 Quick Summary_
+
+```{r eda, out.height="35%", fig.align='center'}
+#Get a quick summary of the data set
+heart1 %>%
+  summary()
+```
+
+_4.2.2 Binary Variables Distribution_
+
+```{r}
+#Sex
+p1 <- heart %>%
+  ggplot(aes(x = sex)) +
+  geom_bar(fill = "indianred3") +
+  labs(x = "Sex") + 
+  theme_minimal(base_size=10)
+
+#Smoking
+p2 <- heart %>%
+  ggplot(aes(x = smoking)) +
+  geom_bar(fill = "seagreen2") + 
+  labs(x = "Smoking") + 
+  theme_minimal(base_size=10)
+
+#Diabetes
+p3 <- heart %>% 
+  ggplot(aes(x = diabetes)) +
+  geom_bar(fill="orange2") +
+  labs(x="Diabetes Status") + 
+  theme_minimal(base_size=10)
+
+#Anaemia 
+p4 <- heart %>%
+  ggplot(aes(x = anaemia)) +
+  geom_bar(fill="lightblue") + 
+  labs(x = "Anaemia") + 
+  theme_minimal(base_size=10)
+
+#High blood pressure
+p5 <- heart %>%
+  ggplot(aes(x=high_blood_pressure)) +
+  geom_bar(fill="pink2") +
+  labs(x = "High Blood Pressure Status") +
+  theme_minimal(base_size=10)
+
+#Event
+p6 <- heart %>%
+  ggplot(aes(x = DEATH_EVENT)) + 
+  geom_bar(fill="orangered3") + 
+  labs(x = "Event Status") + 
+  theme_minimal(base_size=10)
+
+library(patchwork)
+(p1 + p2 + p3 + p4 + p5 + p6) +
+  plot_annotation(title = "Demographic and Baseline Characteristics Distribution")
+```
+
+_4.2.3 Continuous Variables Distribution_
+
+```{r}
+#Age
+c1 <- heart %>%
+  ggplot(aes(age)) + 
+  geom_histogram(binwidth = 5, colour="white", fill="darkseagreen2", alpha=0.8) +
+  geom_density(eval(bquote(aes(y=..count..*5))), colour="darkgreen", fill="darkgreen", alpha=0.3) +
+  scale_x_continuous(breaks=seq(40,100,10)) +
+  geom_vline(xintercept = 65, linetype="dashed") + 
+  annotate("text", x=50, y=45, label="Age <65", size=3, color="dark green") + 
+  annotate("text", x=80, y=45, label="Age >= 65", size=3, color="dark red") + 
+  labs(x = "Age") + 
+  theme_bw()
+
+#CPK
+c2 <- heart %>%
+  ggplot(aes(creatinine_phosphokinase)) +
+  geom_histogram(binwidth=100, colour="white", fill="mediumpurple2", alpha=0.8) +
+  geom_density(eval(bquote(aes(y=..count..*150))), colour="mediumorchid1", fill="mediumorchid1", alpha=0.3) +
+  labs(x = "CPK") + 
+  theme_bw()
+
+#Ejection Fraction
+c3 <- heart %>%
+  ggplot(aes(ejection_fraction)) +
+  geom_histogram(binwidth=5, colour="white", fill="lightpink1", alpha=0.8) +
+  geom_density(eval(bquote(aes(y=..count..*5))),colour="mistyrose2", fill="mistyrose2", alpha=0.3) +
+  scale_x_continuous(breaks=seq(0,80,10)) +
+  labs(x = "Ejection Fraction") +
+  theme_bw()
+
+#Platelets
+c4 <- heart %>%
+  ggplot(aes(platelets)) + 
+  geom_histogram(binwidth=20000, colour="white", fill="lightskyblue2", alpha=0.8) +
+  geom_density(eval(bquote(aes(y=..count..*25000))),colour="lightsteelblue", fill="lightsteelblue", alpha=0.3) +
+  labs(x = "Platelets Count") + 
+  theme_bw()
+
+#Serum Sodium
+c5 <- heart %>%
+  ggplot(aes(serum_sodium)) + 
+  geom_histogram(binwidth=1, colour="white", fill="lightsalmon", alpha=0.8) +
+  geom_density(eval(bquote(aes(y=..count..))),colour="lightcoral", fill="lightcoral", alpha=0.3) +
+  labs(x = "Serum Sodium") + 
+  theme_bw()
+
+#Serum Creatinine
+c6 <- heart %>%
+  ggplot(aes(serum_creatinine)) +
+  geom_histogram(binwidth=0.2, colour="white", fill="lightgoldenrod", alpha=0.8) +
+  geom_density(eval(bquote(aes(y=..count..*0.2))),colour="moccasin", fill="moccasin", alpha=0.3) +
+  labs(x = "Serum Creatinine") + 
+  theme_bw()
+
+#Follow-up Period
+c7 <- heart %>%
+  ggplot(aes(time)) +
+  geom_histogram(binwidth=30, colour="white", fill="skyblue", alpha=0.8) +
+  geom_density(eval(bquote(aes(y=..count..*30))), colour="moccasin", fill="moccasin", alpha=0.3) +
+  labs(x = "Follow-up (days)") + 
+  theme_bw()
+
+(c1 + c2 + c3 + c4 + c5 + c6 + c7) +
+  plot_annotation(title = "Age, Lab Test Results and Follow-up Period Distributions")
+```
+
+### 4.3 Correlations
+
+_4.3.1 Correlation Matrix_
+
+From the correlation matrix, we can see _Death Event_ is highly correlated (point-biserial correlation) with follow-up duration, serum creatinine, age, serum sodium, and ejection fraction. 
+
+```{r}
+h1<- read_csv("../data/heart_failure_clinical_records_dataset.csv")
+
+library(corrplot)
+r=cor(h1)
+corrplot(r, order = "hclust", 
+         tl.col = "black", method = "ellipse")
+
+#ggpairs(heart, columns = c(1, 3, 5, 7, 8, 9, 12, 13))
+```
+
+\pagebreak
+### 4.4. Assumption Tests 
+
+### Binomial Logistic Regression Model
+
+Since, our outcome variable (DEATH_EVENT) is binary, the preliminary model that we will use is the logistic regression model.
+
+_4.4.1 Assumptions_
+
+1. The dependent variable is categorical (binary).
+2. The observations are independent of each other.
+3. There is no severe multicollinearity among the explanatory variables.
+4. There are no extreme outliers.
+5. The independent variables are linearly related to the log odds.
+6. The sample size of the dataset is large enough to draw valid conclusions from the fitted logistic regression model.
+
+Out of the above 6 assumptions, the 3rd assumption about multicollinearity will be tested using condition index (CI) and variance inflation factor (VIF). There is no evidence to suggest that the remaining 5 assumptions are violated. 
+
+_4.4.2 Training and Evaluating the Model_
+
+We see based on the p-values in the following summary output, not all of the features in this full model are significant. Variables like age, ejection fraction, serum creatinine and time (follow-up period) are significant (p-values < 0.05), while other predictors such as anaemia, diabetes, high_blood_pressure, platelets, serum_sodium, sex and smoking are not significant (p-values > 0.05).
+
+```{r}
+h_full <- glm(DEATH_EVENT~., family =  binomial(link = "logit"), data = heart)
+
+summary(h_full)
+```
+
+_4.4.3 Dealing with Multi-collinearity_
+
+Multi-collinearity is a problem because it makes it difficult to separate out the impact of individual predictors on response. We evaluate the overall multi-collinearity of the model using Condition Index (CI). If the model suffers from multi-collinearity (i.e. CI > 30), we will identify which predictors contribute the most to this collinearity condition using Variance Inflation Factor (VIF). A VIF of greater than 10 indicates the presence of severe multi-collinearity and requires remediation. 
+
+```{r}
+# Contains the cond.index() function to compute the CI;
+library(klaR) 
+# Contains the vif() function
+library(car)
+cond.index(h_full, data = heart)
+```
+
+From the output, we can see that CI, which is the square root of the ratio of largest to the smallest Eigenvalue of the correlation matrix, is 136.5, much greater than 30, implying severe multi-collinearity. Therefore, we use the VIF to estimate the variance inflation contribution of each predictor.
+
+```{r}
+vif(h_full)
+```
+
+None of the VIF values are greater than 10 (or even 5). It is likely that a predictor is highly correlated with the intercept. We will try centering the data to eliminate the intercept and check again.
+
+### 4.5 Data Pre-processing and Transformations
+
+_4.5.1 Centering_
+
+With centering, only the intercept changes, the $\beta$ coefficients and the p-values do not change.
+
+```{r}
+heart %>%
+  dplyr::select(age, creatinine_phosphokinase, ejection_fraction,
+         platelets, serum_creatinine, serum_sodium,
+         time) %>%
+  scale(center = T, scale = F) %>%
+  data.frame() ->
+  h_centered
+
+heart %>%
+  dplyr::select(anaemia, diabetes, high_blood_pressure,
+         sex, smoking, DEATH_EVENT) %>%
+  cbind(h_centered) ->
+  h_centered
+
+h_centered_model <- glm(DEATH_EVENT~., 
+                        family =  binomial(link = "logit"), 
+                        data = h_centered)
+cond.index(h_centered_model, data = h_centered)
+```
+
+From the CI value of 5.6, we can see that centering helped. The CI came down drastically from the earlier value of 136.5 to 5.6. We can also use other ways to deal with multi-collinearity such as using shrinkage methods (Ridge, LASSO) or dimension reduction methods (PCR, PLS).
+
+_4.5.2 Log Transformation_
+
+Some of the continuous predictors such as CPK and Serum creatinine are right-skewed. One of the ways to make them closer to normal distribution is to take the logarithm. However, we have a sample size of 299 (50+ data points), therefore, the predictors do not have to be normally distributed. Therefore, we leave the continuous predictors without any transformation.
+
+## 5. Modeling Methods and Model Specifications
+
+The goal is inference so we are interested in methods where in addition to the prediction accuracy, we are also able to interpret the model. 
+
+### 5.1 Initial Model Specification
+
+Logistic Regression - Full Model - h_full.
+
+### 5.2 Initial OLS or Logit Model Results
+
+### 5.3 Assumption Tests
+
+### 5.4 Model Candidates and Rationale
+
+Rationale - Ours is a classification problem. Goal is interpretation. So we choose models accordingly and compare their performance. 
+
+- Logit Model
+- LASSO Model
+- Random Forest
+- Boosted Trees
+
+### 5.5 Model Specification Candidates and Rationale
+
+We end up with the following two model specifications across all models.
+
+1. **Full model with all the variables:** The full logistic model has tolerable multicollinearity after centering, so it is a good model to consider since it contains all the variables and no information is lost.
+
+2. **Smaller nested model with only the most significant predictors:** - age, ejection_fraction, serum_creatinine, and time (follow up time). We tried the quadratic model but the coefficients were found to be not significant. Other larger models with some more predictors (control variables) was also an option. Across the different models, we found that the 4 significant variables in the logit models have relatively higher variable importance. Also, multicollinearity was not an issue in the logit model wiht these 4 variables. Hence, we used the model specification (4 significant variables listed above) across the different models and compare their performance. We used stepwise as a variable selection method here.
+
+\newpage
+_5.4.1 Logistic Regression_
+
+1. **Full Mode1**
+2. **Smaller nested model using step-wise variable selection:** Variables selection can be based on business knowledge. It is safe to remove variables that are not statistically significant. But it is not okay to remove significant variables, unless we have sound justification or serious dimensionality issues. 
+
+Initially, p < 0.15, which is the default, is the criterion used for variable inclusion and removal, so as to retain marginally significant predictors as control variables.
+
+```{r}
+h_full <- glm(DEATH_EVENT~., family =  binomial(link = "logit"), data = heart)
+h_small <- glm(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, family =  binomial(link = "logit"), data = heart)
+
+h_step_15p <- step(h_full, 
+ scope = list(lower=h_small, upper=h_full),
+ direction = "both", 
+ test = "F")
+
+summary(h_step_15p)
+
+cond.index(h_step_15p, data = heart)
+vif(h_step_15p)
+```
+
+The h_step_15p model still has severe multi-collinearity with CI at 105 >> 50 although all VIFs way below 10. So, just like before, the multicollinearity is possibly with the intercept and centering should help.
+
+Next we try p < 0.05, a more restrictive criterion, to explore if the resulting model has multicollinearity issue or not.
+
+```{r}
+kval <- qchisq(0.05, 1, lower.tail = F)
+
+h_step_05p <- step(h_full, 
+ scope = list(lower = h_small, upper = h_full),
+ direction = "both", 
+ test = "F", 
+ k = kval)
+summary(h_step_05p)
+
+cond.index(h_step_05p, data = heart)
+```
+
+The h_step_05p model is much better and has a CI of 17, which is acceptable. Also, the h_step_05p model has no non-significant predictor.
+
+3. **Non-linear Model**
+
+We see in the h_step_05p model that age is negatively associated with the heart failure probability. To explore this further, we make use of non-linear models. We fit a quadratic polynomial model to evaluate the non-linear effect of age on DEATH_EVENT.
+
+```{r}
+h_quad <- glm(DEATH_EVENT~ poly(age, 2, raw = T) + ejection_fraction + serum_creatinine + time, family =  binomial(link = "logit"), data = heart)
+
+#anova(h_quad, h_step_05p) #Not helpful for logit
+
+summary(h_quad)
+```
+
+In the quadratic model h_quad, the linear effect of age is positive and the quadratic effect is negative but both the linear and the quadratic effects are not significant. So, the linear model h_step_05p is better. 
+
+\newpage
+_5.4.2 LASSO_
+
+1. **Model Specification 1:** The full logit model has multicollinearity. One of the ways to deal with multicollinearity is to use shrinkage methods such as Ridge and LASSO. These are specially useful to reduce variance caused by dimensionality when business rationale suggests that many variables need to be retained.
+
+```{r}
+library(glmnet)
+
+x <- model.matrix(DEATH_EVENT~., data = heart)[,-1]
+y <- heart$DEATH_EVENT
+
+h_lasso <- glmnet(x, y,
+                  alpha = 1,  #LASSO
+                  family = "binomial")
+
+plot(h_lasso)
+```
+
+In the plot, we can see how the coefficients shrink and some of them drop out as we move toward the left, that is, as the lambda goes up. Next we use 10-fold cross-validation to get the best lambda, that is, the lambda for which the deviance is the minimum.
+
+```{r}
+set.seed(1)
+
+h_lasso.cv10 <- cv.glmnet(x, y, alpha = 1, family = "binomial")
+
+plot(h_lasso.cv10)
+
+lasso.best.lambda <- h_lasso.cv10$lambda.min
+min.cv.lasso <- min(h_lasso.cv10$cvm)
+
+cbind("Best Lambda" = lasso.best.lambda,
+      "Best Log Lambda" = log(lasso.best.lambda),
+      "Best 10F-CV" = min.cv.lasso)
+```
+
+Next we retrieve the LASSO regression coefficients from the h_lasso model object for the Best Lambda and compare them to the plain logit coefficients.
+
+```{r}
+lasso.coef <- coef(h_lasso, s = lasso.best.lambda)
+lasso.coef.0 <- coef(h_lasso, s = 0)
+
+# Bind and round all coefficients
+all.coefs <- round(cbind(lasso.coef, 
+ exp(lasso.coef), 
+lasso.coef.0, 
+exp(lasso.coef.0)),
+ digits = 3)
+# Label the coefficients
+colnames(all.coefs) <- c("Best LASSO", "Odds", "0-Lambda LASSO", "0dds")
+# Display them
+all.coefs
+```
+
+2. **Model Specification 2:** 
+
+Since, there is not much multicollinearity in the logit model with 4 variables, we expect the LASSO coefficients and the logit coefficients to be not very different as the shrinkage parameter $\lambda$ is likely to quite small.
+
+```{r}
+x2 <- model.matrix(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, data = heart)[,-1]
+y2 <- heart$DEATH_EVENT
+
+h_lasso2 <- glmnet(x2, y2,
+                  alpha = 1,  #LASSO
+                  family = "binomial")
+
+plot(h_lasso2)
+```
+
+In the plot, we can see how the coefficients shrink as we move toward the left, that is, as the lambda goes up. Next we use 10-fold cross-validation to get the best lambda, that is, the lambda for which the deviance is the minimum.
+
+```{r}
+set.seed(1)
+
+h_lasso2.cv10 <- cv.glmnet(x2, y2, alpha = 1, family = "binomial")
+
+plot(h_lasso2.cv10)
+
+lasso2.best.lambda <- h_lasso2.cv10$lambda.min
+min.cv.lasso2 <- min(h_lasso2.cv10$cvm)
+
+cbind("Best Lambda" = lasso2.best.lambda,
+      "Best Log Lambda" = log(lasso2.best.lambda),
+      "Best 10F-CV" = min.cv.lasso2)
+```
+
+Next we retrieve the LASSO regression coefficients from the h_lasso2 model object for the Best Lambda and compare them to the plain logit coefficients.
+
+```{r}
+lasso2.coef <- coef(h_lasso2, s = lasso2.best.lambda)
+lasso2.coef.0 <- coef(h_lasso2, s = 0)
+
+# Bind and round all coefficients
+all.coefs2 <- round(cbind(lasso2.coef, 
+ exp(lasso2.coef), 
+lasso2.coef.0, 
+exp(lasso2.coef.0)),
+ digits = 3)
+# Label the coefficients
+colnames(all.coefs2) <- c("Best LASSO", "Odds", "0-Lambda LASSO", "0dds")
+# Display them
+all.coefs2
+```
+
+\newpage
+_5.4.3 Random Forest_
+
+1. **Full Model Specification:** p (number of predictors) = 12. We choose M (Number of variables per tree) = sqrt(p) = 4 because it has been shown to give good performance.
+
+```{r}
+library(randomForest)
+
+h_rf <- randomForest(DEATH_EVENT~., 
+                      data = heart1, 
+                      mtry = 4, importance = T)
+plot(h_rf)
+
+varImpPlot(h_rf)
+importance(h_rf)[,3:4]
+
+mean.err.rf <- mean(h_rf$err.rate)
+
+cbind("Mean Error Rate" = mean.err.rf)
+```
+
+2. **Smaller Model Specifications:** p (number of predictors) = 4. We choose M (Number of variables per tree) = sqrt(p) = 2.
+
+```{r}
+h_rf2 <- randomForest(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, 
+                      data = heart1, 
+                      mtry = 2, importance = T)
+plot(h_rf2)
+
+varImpPlot(h_rf2)
+importance(h_rf2)[,3:4]
+
+mean.err.rf2 <- mean(h_rf2$err.rate)
+
+cbind("Mean Error Rate" = mean.err.rf2)
+```
+
+\newpage
+_5.4.4 Boosted Trees_
+
+1. **Full Model Specification**
+
+```{r}
+library(gbm)
+
+set.seed(1)
+
+h_boost <- gbm(DEATH_EVENT~., data = heart,
+               distribution = "bernoulli",
+               shrinkage = 0.01,
+               cv.folds = 10,
+               n.trees = 5000,
+               interaction.depth = 1)
+h_boost
+summary(h_boost)
+
+min.boost <- min(h_boost$cv.error) %>%
+  round(3)
+best.num.trees <- which.min(h_boost$cv.error)
+
+plot(h_boost$cv.error,
+     type = "l",
+     xlab = "Number of Boosted Trees",
+     ylab = "10FCV Test error rate")
+```
+
+Partial dependency graphs:
+
+Holding everything else constant, on average, 
+
+```{r}
+#If type="response" then gbm converts back to the same scale as the #outcome. Currently the only effect this will have is returning #probabilities for bernoulli and expected counts for poisson.
+plot(h_boost,
+     i = "age",
+     type="response",
+     ylab = "DEATH_EVENT",
+     xlab = "Age")
+
+plot(h_boost,
+     i = "serum_creatinine",
+     type="response",
+     ylab = "DEATH_EVENT",
+     xlab = "serum creatinine")
+
+plot(h_boost,
+     i = "ejection_fraction",
+     type="response",
+     ylab = "DEATH_EVENT",
+     xlab = "ejection fraction")
+```
+
+2. **Model Specification 2**
+
+```{r}
+set.seed(1)
+
+h_boost2 <- gbm(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, data = heart,
+               distribution = "bernoulli",
+               shrinkage = 0.01,
+               cv.folds = 10,
+               n.trees = 5000,
+               interaction.depth = 1)
+h_boost2
+summary(h_boost2)
+
+min.boost2 <- min(h_boost2$cv.error) %>%
+  round(3)
+best.num.trees2 <- which.min(h_boost2$cv.error)
+
+plot(h_boost2$cv.error,
+     type = "l",
+     xlab = "Number of Boosted Trees",
+     ylab = "10FCV Test error rate")
+```
+
+Partial dependency graphs
+
+```{r}
+#If type="response" then gbm converts back to the same scale as the #outcome. Currently the only effect this will have is returning #probabilities for bernoulli and expected counts for poisson.
+plot(h_boost2,
+     i = "age",
+     type="response",
+     ylab = "DEATH_EVENT",
+     xlab = "Age")
+
+plot(h_boost2,
+     i = "serum_creatinine",
+     type="response",
+     ylab = "DEATH_EVENT",
+     xlab = "serum creatinine")
+
+plot(h_boost2,
+     i = "ejection_fraction",
+     type="response",
+     ylab = "DEATH_EVENT",
+     xlab = "ejection fraction")
+```
+
+\newpage
+## 6. Analysis of Results
+
+_6.1 Train Models on Train Sub-Sample_
+
+To evaluate the performance of different models, we split the data set into two parts training and test. Using the training data set, we refit the models before evaluating their performance using the test data set. 
+
+Class imbalance is a common problem when working with real-world data. The performance of ML model is degraded because of it as it biases the model toward the majority class at the expense of the minority class. The class distribution of the test data set should mirror that of the original dataset because a model's performance against the test data is a proxy for its generalizability against unseen data. However, the training data should be balanced prior to the modeling process.
+
+```{r}
+RNGkind(sample.kind="default")
+set.seed(1)
+options(scipen = 4)
+tr.size <- 0.8
+train <- sample(nrow(heart), tr.size * nrow(heart))
+
+heart.train <- heart[train, ]
+heart.test <- heart[-train, ]
+heart1.test <- heart.test %>%
+  mutate(DEATH_EVENT = factor(DEATH_EVENT))
+
+heart1.train <- heart.train %>%
+  mutate(DEATH_EVENT = factor(DEATH_EVENT))
+
+round(prop.table(table(dplyr::select(heart, DEATH_EVENT), 
+                       exclude = NULL)),4)*100
+round(prop.table(table(dplyr::select(heart.test, DEATH_EVENT), 
+                       exclude = NULL)),4)*100
+
+library(performanceEstimation)
+heart1.train_ <- smote(DEATH_EVENT~., heart1.train, perc.over = 2, perc.under = 1.5)
+
+heart.train_ <- heart1.train_ %>%
+  mutate(DEATH_EVENT = as.numeric(DEATH_EVENT)-1)
+
+round(prop.table(table(dplyr::select(heart.train_, DEATH_EVENT), 
+                       exclude = NULL)),4)*100
+```
+
+Now we fit the 4 X 2 models, 2 each of logit, LASSO, Random Forest and Boosted Tree models.
+
+```{r}
+#Models 1.1 and 1.2
+m1.1 <- glm(DEATH_EVENT~., family =  binomial(link = "logit"), data = heart.train_)
+m1.2 <- glm(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, family =  binomial(link = "logit"), data = heart.train_)
+
+#Models 2.1 and 2.2
+x2.1 <- model.matrix(DEATH_EVENT~., data = heart.train_)[,-1]
+y2.1 <- heart.train_$DEATH_EVENT
+m2.1 <- glmnet(x2.1, y2.1, alpha = 1, family = "binomial")
+m2.1.cv10 <- cv.glmnet(x2.1, y2.1, alpha = 1, family = "binomial")
+m2.1.best.labmda <- m2.1.cv10$lambda.min
+
+
+x2.2 <- model.matrix(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, data = heart.train_)[,-1]
+y2.2 <- heart.train_$DEATH_EVENT
+m2.2 <- glmnet(x2.2, y2.2, alpha = 1, family = "binomial")
+m2.2.cv10 <- cv.glmnet(x2.2, y2.2, alpha = 1, family = "binomial")
+m2.2.best.labmda <- m2.2.cv10$lambda.min
+
+#Models 3.1 and 3.2
+m3.1 <- randomForest(DEATH_EVENT~., data = heart1.train_, 
+                      mtry = 4, importance = T)
+
+m3.2 <- randomForest(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, 
+                      data = heart1.train_, 
+                      mtry = 2, importance = T)
+
+#Models 4.1 and 4.2
+m4.1 <- gbm(DEATH_EVENT~., data = heart.train_,
+               distribution = "bernoulli",
+               shrinkage = 0.01,
+               cv.folds = 10,
+               n.trees = 5000,
+               interaction.depth = 1)
+
+m4.2 <- gbm(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, data = heart.train_,
+               distribution = "bernoulli",
+               shrinkage = 0.01,
+               cv.folds = 10,
+               n.trees = 5000,
+               interaction.depth = 1)
+```
+
+_6.2 Classification Predictions_
+
+Predictions with the trained model and test subset. 
+
+```{r}
+probs.test.1.1 <- predict(m1.1, heart.test, type="response")
+pred.test.1.1 <- ifelse(probs.test.1.1 > 0.5, 1, 0)
+
+probs.test.1.2 <- predict(m1.2, heart.test, type="response")
+pred.test.1.2 <- ifelse(probs.test.1.2 > 0.5, 1, 0)
+
+probs.test.2.1 <- predict(m2.1, s = m2.1.best.labmda, 
+                          newx = model.matrix(DEATH_EVENT~., data = heart.test)[,-1], 
+                          type="response")
+pred.test.2.1 <- ifelse(probs.test.2.1 > 0.5, 1, 0)
+
+probs.test.2.2 <- predict(m2.2, s = m2.2.best.labmda, 
+                          newx = model.matrix(DEATH_EVENT~age + ejection_fraction + serum_creatinine + time, data = heart.test)[,-1], 
+                          type="response")
+pred.test.2.2 <- ifelse(probs.test.2.2 > 0.5, 1, 0)
+
+probs.test.3.1 <- predict(m3.1, heart1.test, type="prob")[,2]
+pred.test.3.1 <- ifelse(probs.test.3.1 > 0.5, 1, 0)
+probs.test.3.2 <- predict(m3.2, heart1.test, type="prob")[,2]
+pred.test.3.2 <- ifelse(probs.test.3.2 > 0.5, 1, 0)
+
+probs.test.4.1 <- predict(m4.1, heart.test, type="response")
+pred.test.4.1 <- ifelse(probs.test.4.1 > 0.5, 1, 0)
+
+probs.test.4.2 <- predict(m4.2, heart.test, type="response")
+pred.test.4.2 <- ifelse(probs.test.4.2 > 0.5, 1, 0)
+```
+
+_6.3 Confusion Matrices_
+
+- Model 1.1
+
+```{r}
+#Model 1.1
+conf.mat1.1 <- table("Predicted" = pred.test.1.1, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat1.1[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat1.1[2,2] # True positives, row 2 col 2
+FalP <- conf.mat1.1[2,1] # False positives, etc.
+FalN <- conf.mat1.1[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat1.1, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix, Prob Thres > 0.5")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+- Model 1.2
+
+```{r}
+#Model 1.1
+conf.mat1.2 <- table("Predicted" = pred.test.1.2, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat1.2[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat1.2[2,2] # True positives, row 2 col 2
+FalP <- conf.mat1.2[2,1] # False positives, etc.
+FalN <- conf.mat1.2[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat1.2, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix, Prob Thres > 0.5")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+- Model 2.1
+
+```{r}
+#Model 1.1
+conf.mat2.1 <- table("Predicted" = pred.test.2.1, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat2.1[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat2.1[2,2] # True positives, row 2 col 2
+FalP <- conf.mat2.1[2,1] # False positives, etc.
+FalN <- conf.mat2.1[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat2.1, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix, Prob Thres > 0.5")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+- Model 2.2
+
+```{r}
+#Model 1.1
+conf.mat2.2 <- table("Predicted" = pred.test.2.2, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat2.2[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat2.2[2,2] # True positives, row 2 col 2
+FalP <- conf.mat2.2[2,1] # False positives, etc.
+FalN <- conf.mat2.2[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat2.2, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix, Prob Thres > 0.5")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+- Model 3.1
+
+```{r}
+#Model 1.1
+conf.mat3.1 <- table("Predicted" = pred.test.3.1, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat3.1[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat3.1[2,2] # True positives, row 2 col 2
+FalP <- conf.mat3.1[2,1] # False positives, etc.
+FalN <- conf.mat3.1[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat3.1, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+- Model 3.2
+
+```{r}
+#Model 1.1
+conf.mat3.2 <- table("Predicted" = pred.test.3.2, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat3.2[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat3.2[2,2] # True positives, row 2 col 2
+FalP <- conf.mat3.2[2,1] # False positives, etc.
+FalN <- conf.mat3.2[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat3.2, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+- Model 4.1
+
+```{r}
+#Model 1.1
+conf.mat4.1 <- table("Predicted" = pred.test.4.1, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat4.1[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat4.1[2,2] # True positives, row 2 col 2
+FalP <- conf.mat4.1[2,1] # False positives, etc.
+FalN <- conf.mat4.1[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat4.1, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix, Prob Thres > 0.5")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+- Model 4.2
+
+```{r}
+#Model 1.1
+conf.mat4.2 <- table("Predicted" = pred.test.4.2, 
+                  "Actual" = heart.test$DEATH_EVENT) 
+
+TruN <- conf.mat4.2[1,1] # True negatives, row 1 col 1
+TruP <- conf.mat4.2[2,2] # True positives, row 2 col 2
+FalP <- conf.mat4.2[2,1] # False positives, etc.
+FalN <- conf.mat4.2[1,2] # False negatives
+
+TotP <- TruP + FalN # Total positives
+TotN <- TruN + FalP # Total negatives
+
+TotNPr <- TruN + FalN # Total negative predictions
+TotPPr <- TruP + FalP # Total positive predictions
+
+Tot <- TotN+TotP # Matrix total
+
+conf.mat.pr.totals <- cbind(conf.mat4.2, c(TotNPr, TotPPr))
+conf.mat.totals <- rbind(conf.mat.pr.totals, c(TotN, TotP, Tot))
+
+colnames(conf.mat.totals) <- # Column labels
+  rownames(conf.mat.totals) <- # Row labels
+     c("No","Yes", "Total") 
+
+knitr::kable(conf.mat.totals, 
+             format = "simple", 
+             caption = "Confusion Matrix, Prob Thres > 0.5")
+
+
+Accuracy <- (TruN + TruP) / Tot
+Error <- (FalN + FalP) / Tot
+Sensitivity <- TruP / TotP # Proportion of correct positives
+Specificity <- TruN / TotN # Proportion of correct negatives
+FalsePos <- 1 - Specificity
+
+logit.rates <- round(cbind(Accuracy, Error, 
+                              Sensitivity, Specificity, 
+                              FalsePos),
+                        digits = 3)
+
+logit.rates
+```
+
+_6.4 ROC Curves and AUC_
+
+ROC curve is commonly used to visually represent the relationship between a model's true positive rate and false positive rate for all possible cutoff values. ROC curve is summarized into a single quantity known as area under the curve (AUC), which measures the entire two-dimensional area underneath the ROC curve from (0,0) to (1,1). The higher the AUC, the better the performance of the model overall at distinguishing between the positive and negative classes.
+
+```{r}
+# (as.numeric(pred.test.3.1)-1) ->
+#   probs.test.3.1
+# (as.numeric(pred.test.3.2)-1) ->
+#   probs.test.3.2
+
+pred1.1 <- prediction(probs.test.1.1, heart.test$DEATH_EVENT) 
+pred1.2 <- prediction(probs.test.1.2, heart.test$DEATH_EVENT)
+pred2.1 <- prediction(probs.test.2.1, heart.test$DEATH_EVENT)
+pred2.2 <- prediction(probs.test.2.2, heart.test$DEATH_EVENT)
+pred3.1 <- prediction(probs.test.3.1, heart.test$DEATH_EVENT)
+pred3.2 <- prediction(probs.test.3.2, heart.test$DEATH_EVENT)
+pred4.1 <- prediction(probs.test.4.1, heart.test$DEATH_EVENT)
+pred4.2 <- prediction(probs.test.4.2, heart.test$DEATH_EVENT)
+
+perf1.1 <- performance(pred1.1, "tpr", "fpr")
+perf1.2 <- performance(pred1.2, "tpr", "fpr")
+perf2.1 <- performance(pred2.1, "tpr", "fpr")
+perf2.2 <- performance(pred2.2, "tpr", "fpr")
+perf3.1 <- performance(pred3.1, "tpr", "fpr")
+perf3.2 <- performance(pred3.2, "tpr", "fpr")
+perf4.1 <- performance(pred4.1, "tpr", "fpr")
+perf4.2 <- performance(pred4.2, "tpr", "fpr")
+
+#Specification 1
+plot(perf1.1, main = "ROC Curves - Model Specification 1", col = "green", lwd = 3)
+plot(perf2.1, add = T, col = "blue", lwd = 2)
+plot(perf3.1, add = T, col = "red", lwd = 2)
+plot(perf4.1, add = T, col = "black", lwd = 2)
+abline(a = 0, b = 1, lwd = 1, lty = 2, col = 1)
+legend("bottomright", legend=c("Logit Reg.","LASSO", "Random Forest", "Boosted Trees"),
+       col=c("green", "blue", "red", "black"), lwd=2)
+
+auc <- performance(pred1.1, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for Logit Model =", auc.val)
+
+auc <- performance(pred2.1, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for LASSO =", auc.val)
+
+auc <- performance(pred3.1, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for Random Forest =", auc.val)
+
+auc <- performance(pred4.1, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for Boosted Trees =", auc.val)
+
+#Specification 2
+plot(perf1.1, main = "ROC Curves - Model Specification 2", col = "green", lwd = 3)
+plot(perf2.1, add = T, col = "blue", lwd = 2)
+plot(perf3.1, add = T, col = "red", lwd = 2)
+plot(perf4.1, add = T, col = "black", lwd = 2)
+abline(a = 0, b = 1, lwd = 1, lty = 2, col = 1)
+legend("bottomright", legend=c("Logit Reg.","LASSO", "Random Forest", "Boosted Trees"),
+       col=c("green", "blue", "red", "black"), lwd=2)
+
+auc <- performance(pred1.2, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for Logit Model =", auc.val)
+
+auc <- performance(pred2.2, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for LASSO =", auc.val)
+
+auc <- performance(pred3.2, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for Random Forest =", auc.val)
+
+auc <- performance(pred4.2, "auc")
+auc.val <- round(auc@y.values[[1]], digits = 3)
+paste("Area under the ROC curve for Boosted Trees =", auc.val)
+```
+
+
+\doublespacing
+\pagebreak
+## 7. Conclusion
+
+The capability to predict CVD early assumes a vital role for the patient’s appropriate treatment procedure. Machine learning methods are valuable in this early diagnosis of CVD. In the current study, 3 machine learning techniques were applied on a training data set and validated against a test data set; both of these data sets were based on the data collected from the patients at the Faisalabad Institute of Cardiology and at the Allied Hospital in Faisalabad (Punjab, Pakistan). The results of our model implementations show that based on the measures of future performance - the AUC, all the models perform quite well. Since, interpretation is the goal for our case, the logistic regression classifier is the preferred model among all of them because of its high interpretatability and absence of any severe multicollinearity. 
+
+One limitation of the current study is that it may only be valid on a similar data set as was used for this study, which was sourced from a very specific location. Further research is needed to check if similar results are seen for data collected elsewhere. If an additional external dataset with the same features from a different geographical region had been available, we would have used it as a validation cohort to verify our findings.  
+
+Another limitation of the present study that we report is the small size of the dataset (299 patients): a larger dataset would have permitted us to obtain more reliable results. Additional information about the physical features of the patients (height, weight, body mass index, etc.) and their occupational history would have been useful to detect additional risk factors for cardiovascular health diseases. 
+
+\pagebreak
+## Appendices
+
+### A. Data Information
+
+### B. Visuals, Graphs and Plots
+
+### C. Quantitative R Output
+
+### D. Other
+
+### E. References
+\footnotesize
+1. https://www.kaggle.com/datasets/andrewmvd/heart-failure-clinical-data
+2. Bredy C, Ministeri M, Kempny A, Alonso-Gonzalez R, Swan L, Uebing A, Diller G-P, Gatzoulis MA, Dimopoulos K. New York Heart Association (NYHA) classification in adults with congenital heart disease: relation to objective measures of exercise and outcome. Eur Heart J – Qual Care Clin Outcomes. 2017; 4(1):51–8.
